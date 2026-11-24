@@ -1,26 +1,30 @@
 import { createContext, useContext, useState } from "react";
 import { apiRequest } from "../api/apiClient";
+import { safeStorage } from "../utils/safeStorage";
 
 const STORAGE_KEY = "proposal_creator_auth";
+const EMPTY_AUTH = { token: null, user: null };
 const AuthContext = createContext(null);
 
 const loadStoredAuth = () => {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = safeStorage.getItem(STORAGE_KEY);
     if (!raw) {
-      return { token: null, user: null };
+      return EMPTY_AUTH;
     }
+
     const parsed = JSON.parse(raw);
-    if (!parsed?.token) {
-      return { token: null, user: null };
+    if (!parsed || typeof parsed !== "object" || !parsed.token) {
+      return EMPTY_AUTH;
     }
+
     return {
       token: parsed.token,
       user: parsed.user || null,
     };
   } catch {
-    localStorage.removeItem(STORAGE_KEY);
-    return { token: null, user: null };
+    safeStorage.removeItem(STORAGE_KEY);
+    return EMPTY_AUTH;
   }
 };
 
@@ -28,12 +32,18 @@ export const AuthProvider = ({ children }) => {
   const [auth, setAuth] = useState(loadStoredAuth);
 
   const persistAuth = (data) => {
-    const next = {
-      token: data.token,
-      user: data.user || null,
-    };
+    const token = data && typeof data === "object" ? data.token || null : null;
+    const user = data && typeof data === "object" ? data.user || null : null;
+    const next = { token, user };
+
     setAuth(next);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+
+    if (token) {
+      safeStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+    } else {
+      safeStorage.removeItem(STORAGE_KEY);
+    }
+
     return next;
   };
 
@@ -54,8 +64,8 @@ export const AuthProvider = ({ children }) => {
   };
 
   const logout = () => {
-    setAuth({ token: null, user: null });
-    localStorage.removeItem(STORAGE_KEY);
+    setAuth(EMPTY_AUTH);
+    safeStorage.removeItem(STORAGE_KEY);
   };
 
   return (
